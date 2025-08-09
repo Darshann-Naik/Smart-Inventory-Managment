@@ -1,47 +1,59 @@
 # /app/transaction_service/crud.py
-
 import uuid
-from typing import List, Optional
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-# --- RENAMED ---
-from .models import InventoryTransaction
-from .schemas import InventoryTransactionCreate
-from app.inventory_service.models import InventoryItem
+from . import models, schemas
+from app.store_product_service.models import StoreProduct
 
-async def create_transaction(db: AsyncSession, *, transaction_in: InventoryTransactionCreate, store_id: uuid.UUID, user_id: uuid.UUID) -> InventoryTransaction:
+async def create(db: AsyncSession, transaction_in: schemas.TransactionCreate, user_id: uuid.UUID) -> models.InventoryTransaction:
     """
-    Creates a transaction and updates the corresponding inventory item quantity
-    in a single database transaction.
+    Atomically creates a transaction record and updates the stock level.
+    This is the only way transactions should be created.
     """
-    async with db.begin():
-        inventory_item = (await db.execute(
-            select(InventoryItem)
-            .where(InventoryItem.product_id == transaction_in.product_id, InventoryItem.store_id == store_id)
-            .with_for_update()
-        )).scalar_one_or_none()
+    # Use a pessimistic lock on the inventory item to prevent race conditions
+    store_product = await db.get(
+        StoreProduct,
+        (transaction_in.store_id, transaction_in.product_id),
+        with_for_update=True
+    )
+    if not store_product:
+        raise ValueError("Product not found in this store's inventory.")
 
-        if not inventory_item:
-            raise ValueError("Inventory item not found for this product.")
+    # Calculate quantity_change based on transaction type
+    quantity_change = abs(transaction_in.quantity)
+    if transaction_in.transaction_type == models.TransactionType.SALE:
+        quantity_change = -quantity_change
+        if store_product.stock < transaction_in.quantity:
+            raise ValueError(f"Insufficient stock. Available: {store_product.stock}, Required: {transaction_in.quantity}")
 
-        if transaction_in.quantity_change < 0 and inventory_item.quantity < abs(transaction_in.quantity_change):
-            raise ValueError("Insufficient stock for this transaction.")
-        
-        inventory_item.quantity += transaction_in.quantity_change
-        db.add(inventory_item)
+    # Update the stock
+    store_product.stock += quantity_change
+    db.add(store_product)
 
-        db_transaction = InventoryTransaction.model_validate(
-            transaction_in, 
-            update={"store_id": store_id, "recorded_by_user_id": user_id}
-        )
-        db.add(db_transaction)
-    
+    # Prepare transaction data
+    total_amount = transaction_in.quantity * transaction_in.unit_cost
+    db_transaction = models.InventoryTransaction(
+        **transaction_in.model_dump(),
+        recorded_by_user_id=user_id,
+        quantity_change=quantity_change,
+        total_amount=total_amount
+    )
+
+    db.add(db_transaction)
+    await db.flush()  # Flush to ensure transaction is in the session before refresh
     await db.refresh(db_transaction)
     return db_transaction
 
-async def get_transactions(db: AsyncSession, *, store_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[InventoryTransaction]:
-    """Retrieve all transactions for a store."""
-    statement = select(InventoryTransaction).where(InventoryTransaction.store_id == store_id).offset(skip).limit(limit)
+async def get_all_by_store(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
+    """Retrieves all transactions for a specific store with pagination."""
+    statement = (
+        select(models.InventoryTransaction)
+        .where(models.InventoryTransaction.store_id == store_id)
+        .order_by(models.InventoryTransaction.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(statement)
     return result.scalars().all()

@@ -1,4 +1,4 @@
-# /Smart-Invetory/app/user_service/dependencies.py
+# /app/user_service/dependencies.py
 
 from typing import List
 from fastapi import Depends
@@ -9,9 +9,9 @@ from jose import jwt, JWTError
 from core.config import settings
 from core.database import get_db_session
 from core.exceptions import InvalidTokenException, UnauthorizedException
-from app.user_service import crud, models  # Adjust as per your structure
+from app.user_service import crud, models
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/users/token")
 
 async def get_current_user(
     db: AsyncSession = Depends(get_db_session),
@@ -25,7 +25,8 @@ async def get_current_user(
     except JWTError:
         raise InvalidTokenException()
 
-    user = await crud.get_user_by_email(db, email=email)
+    # CORRECTED: Call the standardized 'get_by_email' function.
+    user = await crud.get_by_email(db, email=email)
     if not user:
         raise InvalidTokenException()
     return user

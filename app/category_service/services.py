@@ -10,56 +10,54 @@ from core.exceptions import ConflictException, NotFoundException, BadRequestExce
 
 logger = logging.getLogger(__name__)
 
-async def create_category_service(db: AsyncSession, category_in: schemas.CategoryCreate) -> models.Category:
+async def create_category(db: AsyncSession, category_in: schemas.CategoryCreate,user_id:uuid.UUID) -> models.Category:
     """Business logic to create a new global category."""
     if category_in.parent_id:
-        parent_category = await crud.get_category_by_id(db, category_id=category_in.parent_id)
+        parent_category = await crud.get(db, category_id=category_in.parent_id)
         if not parent_category:
             raise BadRequestException(detail=f"Parent category with ID '{category_in.parent_id}' not found.")
 
-    existing_category = await crud.get_category_by_prefix(db, prefix=category_in.prefix)
-    if existing_category:
+    if await crud.get_by_prefix(db, prefix=category_in.prefix):
         raise ConflictException(detail=f"Category prefix '{category_in.prefix}' already exists globally.")
 
-    category = await crud.create_category(db, category_in=category_in)
+    category = await crud.create(db, category_in=category_in.model_dump(),user_id=user_id)
     logger.info(f"Global Category '{category.name}' created.")
     return category
 
-async def get_category_by_id_service(db: AsyncSession, category_id: uuid.UUID) -> models.Category:
+async def get_category(db: AsyncSession, category_id: uuid.UUID) -> models.Category:
     """Business logic to retrieve a single category by its ID."""
-    category = await crud.get_category_by_id(db, category_id=category_id)
+    category = await crud.get(db, category_id=category_id)
     if not category:
         raise NotFoundException(resource="Category", resource_id=str(category_id))
     return category
 
-async def get_all_categories_service(db: AsyncSession) -> List[models.Category]:
+async def get_all_categories(db: AsyncSession) -> List[models.Category]:
     """Business logic to retrieve all global categories."""
-    return await crud.get_all_categories(db=db)
+    return await crud.get_all(db=db)
 
-async def update_category_service(db: AsyncSession, category_id: uuid.UUID, category_in: schemas.CategoryUpdate) -> models.Category:
+async def update_category(db: AsyncSession, category_id: uuid.UUID, category_in: schemas.CategoryUpdate) -> models.Category:
     """Business logic to update a category."""
-    db_category = await get_category_by_id_service(db, category_id=category_id)
+    db_category = await get_category(db, category_id=category_id)
     
     if category_in.prefix and category_in.prefix.upper() != db_category.prefix:
-        existing_category = await crud.get_category_by_prefix(db, prefix=category_in.prefix)
-        if existing_category:
+        if await crud.get_by_prefix(db, prefix=category_in.prefix):
             raise ConflictException(detail=f"Category prefix '{category_in.prefix}' already exists globally.")
 
-    updated_category = await crud.update_category(db, db_category=db_category, category_in=category_in)
+    updated_category = await crud.update(db, db_category=db_category, category_in=category_in)
     logger.info(f"Global Category '{updated_category.name}' updated.")
     return updated_category
 
-async def delete_category_service(db: AsyncSession, category_id: uuid.UUID) -> None:
+async def deactivate(db: AsyncSession, category_id: uuid.UUID, user_id: uuid.UUID) -> None:
     """
-    Business logic to delete a category.
-    - Prevents deletion if the category is associated with any products.
+    Business logic to deactivate (soft delete) a category.
+    - Marks the category as inactive without permanently removing it.
+    - Prevents deactivation if the category is associated with any products.
     """
-    db_category = await get_category_by_id_service(db, category_id=category_id)
+    db_category = await get_category(db, category_id=category_id)
     
-    is_in_use = await crud.is_category_in_use(db, category_id=category_id)
-    if is_in_use:
-        logger.warning(f"Attempt to delete category '{category_id}' which is currently in use.")
-        raise ConflictException(detail="Cannot delete category as it is already linked to one or more products.")
+    if await crud.is_in_use(db, category_id=category_id):
+        logger.warning(f"Attempt to deactivate category '{category_id}' which is currently in use.")
+        raise ConflictException(detail="Cannot deactivate category as it is already linked to one or more products.")
         
-    await crud.delete_category(db, db_category=db_category)
-    logger.info(f"Global Category ID '{category_id}' deleted.")
+    await crud.deactivate(db, db_category=db_category, user_id=user_id)
+    logger.info(f"Category ID '{category_id}' has been deactivated.")

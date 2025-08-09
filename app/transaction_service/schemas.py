@@ -1,30 +1,29 @@
 # /app/transaction_service/schemas.py
-
 import uuid
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 from .models import TransactionType
 
-# --- RENAMED: from TransactionBase to InventoryTransactionBase ---
-class InventoryTransactionBase(BaseModel):
+class TransactionBase(BaseModel):
+    store_id: uuid.UUID
     product_id: uuid.UUID
-    quantity_change: int
     transaction_type: TransactionType
-    unit_cost: Optional[float] = Field(default=None)
-    total_amount: Optional[float] = Field(default=None)
-    notes: Optional[str] = None
+    quantity: int = Field(..., gt=0, description="The absolute number of items in the transaction.")
+    unit_cost: float = Field(..., ge=0, description="Cost per item at the time of transaction.")
+    notes: Optional[str] = Field(default=None, description="Additional notes for the transaction.")
 
-# --- RENAMED ---
-class InventoryTransactionCreate(InventoryTransactionBase):
+class TransactionCreate(TransactionBase):
     pass
 
-# --- RENAMED ---
-class InventoryTransactionRead(InventoryTransactionBase):
+# There is no 'Update' schema because transactions are immutable.
+
+class Transaction(TransactionBase):
     id: uuid.UUID
-    store_id: uuid.UUID
     recorded_by_user_id: uuid.UUID
-    transaction_date: datetime
+    quantity_change: int
+    total_amount: float
+    timestamp: datetime
 
     class Config:
         from_attributes = True

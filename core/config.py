@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # JWT Settings
     SECRET_KEY: str = "80514942a1a897392d6acc5240b6905521cdd7e94678fb39e91e81c51493d4a7"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30000
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # CORS

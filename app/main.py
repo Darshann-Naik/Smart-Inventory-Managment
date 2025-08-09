@@ -5,7 +5,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-# This custom router is essential for consistent success responses
 from core.router import StandardAPIRouter
 from core.schemas import ErrorResponse, ErrorDetail
 from core.config import settings
@@ -17,19 +16,14 @@ from app.user_service.api import router as user_router
 from app.store_service.api import router as store_router
 from app.category_service.api import router as category_router
 from app.product_service.api import router as product_router
-from app.inventory_service.api import router as inventory_router
+from app.store_product_service.api import router as store_product_router
 from app.transaction_service.api import router as transaction_router
-
+# CORRECTED: The inventory_service import has been removed.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manages application startup and shutdown events.
-    """
     print("--- Initializing services... ---")
     setup_logging()
-    # In a real application, you would initialize database connections,
-    # Redis pools, etc. here.
     print("--- Application startup complete. ---")
     yield
     print("--- Application shutdown. ---")
@@ -45,7 +39,7 @@ app = FastAPI(
 
 logger = logging.getLogger(__name__)
 
-# Exception handler for custom API exceptions
+# ... (Exception handlers and CORS middleware remain the same) ...
 @app.exception_handler(APIException)
 async def api_exception_handler(request: Request, exc: APIException):
     error_detail = ErrorDetail(
@@ -58,7 +52,6 @@ async def api_exception_handler(request: Request, exc: APIException):
         content=ErrorResponse(errors=[error_detail]).model_dump(),
     )
 
-# Fallback exception handler for any unhandled errors
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
@@ -72,7 +65,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
         content=ErrorResponse(errors=[error_detail]).model_dump(),
     )
 
-# Configure CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
@@ -81,26 +73,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- Main API Router Setup ---
-# Create a single main router that will aggregate all service routers
 api_router = StandardAPIRouter()
 
-# Include each service's router with a specific prefix and tags
 api_router.include_router(user_router, prefix="/users", tags=["Authentication & Users"])
 api_router.include_router(store_router, prefix="/stores", tags=["Stores"])
 api_router.include_router(category_router, prefix="/categories", tags=["Product Categories (Admin)"])
-api_router.include_router(product_router, prefix="/products", tags=["Product Management"])
-api_router.include_router(inventory_router, prefix="/inventory", tags=["Inventory Management"])
+api_router.include_router(product_router, prefix="/products", tags=["Products"])
+api_router.include_router(store_product_router, tags=["Store-Product Links"])
 api_router.include_router(transaction_router, prefix="/transactions", tags=["Transaction Management"])
+# CORRECTED: The inventory_router inclusion has been removed.
 
-# Include the single main router into the app with the global API version prefix
 app.include_router(api_router, prefix=settings.API_V1_STR)
 # --- End Router Setup ---
 
 @app.get("/healthz", tags=["Health Check"])
 async def health_check():
-    """
-    A simple health check endpoint to confirm the API is running.
-    """
-    logger.info("Health check endpoint was called.")
     return {"status": "ok"}
+from app.main import app
+
+for route in app.routes:
+    print(route.path, route.methods)

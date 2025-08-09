@@ -21,8 +21,8 @@ from app.user_service import models as user_models
 from app.store_service import models as store_models
 from app.category_service import models as category_models
 from app.product_service import models as product_models
-from app.inventory_service import models as inventory_models
 from app.transaction_service import models as transaction_models
+from app.store_product_service import models as store_product_models
 # -------------------------
 
 from core.database import create_db_and_tables, drop_db_and_tables, AsyncSessionFactory

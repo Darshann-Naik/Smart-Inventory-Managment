@@ -1,94 +1,76 @@
-# /Smart-Invetory/app/user_service/api.py
-from fastapi import Depends, status
+# /app/user_service/api.py
+from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.router import StandardAPIRouter
 from core.database import get_db_session
 from . import models, schemas, services
 from .dependencies import get_current_active_user
 
-# The router now uses the StandardAPIRouter which handles response wrapping
-router = StandardAPIRouter()
+# All user/auth routes will be prefixed with /users
+router = APIRouter()
 
 @router.post(
-    "/auth/register",
-    response_model=schemas.UserRead, # Return the UserRead schema directly
+    "/register",
+    response_model=schemas.User,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user"
 )
-async def register(
+async def register_user(
     user_in: schemas.UserCreate,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Register a new user and associate them with a store.
-    The response is automatically wrapped in a SuccessResponse by the StandardAPIRouter.
-    """
-    return await services.register_user(db=db, user_in=user_in)
+    """Register a new user and associate them with a store."""
+    return await services.register(db=db, user_in=user_in)
 
 @router.post(
-    "/auth/token",
-    response_model=schemas.Token, # Return the Token schema directly
-    summary="Login for access token"
+    "/token",
+    response_model=schemas.Token,
+    summary="Get access token"
 )
-async def login(
+async def get_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """
-    OAuth2 compatible token login, gets an access token for future requests.
-    The response is automatically wrapped.
-    """
-    return await services.login_for_token(db=db, form_data=form_data)
+    """OAuth2 compatible token login to get an access token."""
+    return await services.login(db=db, form_data=form_data)
 
 @router.post(
-    "/auth/token/refresh",
-    response_model=schemas.Token, # Return the Token schema directly
+    "/token/refresh",
+    response_model=schemas.Token,
     summary="Refresh access token"
 )
-async def refresh_token(
+async def refresh_access_token(
     token_request: schemas.RefreshTokenRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Refresh the access token using a valid refresh token.
-    The response is automatically wrapped.
-    """
-    return await services.refresh_access_token(db=db, token_request=token_request)
-
+    """Refresh an access token using a valid refresh token."""
+    return await services.refresh_token(db=db, token_request=token_request)
 
 @router.get(
-    "/me", # Simplified path, full path will be /api/v1/users/me
-    response_model=schemas.UserRead, # Return the UserRead schema directly
-    summary="Get current user"
+    "/me",
+    response_model=schemas.User,
+    summary="Get current user profile"
 )
-async def read_current_user(
+async def get_current_user(
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Get current user profile.
-    The response is automatically wrapped.
-    """
+    """Get the profile of the currently authenticated user."""
     return current_user
-
 
 @router.put(
     "/me",
-    response_model=schemas.UserRead,
-    summary="Update current user"
+    response_model=schemas.User,
+    summary="Update current user profile"
 )
-async def update_current_user_profile(
+async def update_current_user(
     update_data: schemas.UserUpdate,
-    db_session: AsyncSession = Depends(get_db_session),
-    authenticated_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Update the profile of the currently authenticated user.
-    """
-    return await services.update_user_profile(
-        db=db_session,
-        user=authenticated_user,
+    """Update the profile of the currently authenticated user."""
+    return await services.update_profile(
+        db=db,
+        user=current_user,
         update_data=update_data
     )
-

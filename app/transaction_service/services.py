@@ -1,38 +1,39 @@
 # /app/transaction_service/services.py
-
 import uuid
 import logging
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
-# --- RENAMED ---
 from . import crud, models, schemas
-from app.inventory_service.crud import get_inventory_item_by_product_id
-from core.exceptions import BadRequestException
+from core.exceptions import BadRequestException, NotFoundException
 
 logger = logging.getLogger(__name__)
 
-async def record_transaction_service(db: AsyncSession, transaction_in: schemas.InventoryTransactionCreate, store_id: uuid.UUID, user_id: uuid.UUID) -> models.InventoryTransaction:
+async def create_transaction(db: AsyncSession, transaction_in: schemas.TransactionCreate, user_id: uuid.UUID) -> models.InventoryTransaction:
     """
-    Business logic to record a transaction.
+    Service layer for recording an inventory transaction.
+    Wraps the atomic CRUD operation in a transaction block.
     """
-    inventory_item = await get_inventory_item_by_product_id(db, product_id=transaction_in.product_id, store_id=store_id)
-    if not inventory_item:
-        raise BadRequestException(detail="No inventory record for this product. Please add the product to inventory first.")
-    
-    try:
-        transaction = await crud.create_transaction(db=db, transaction_in=transaction_in, store_id=store_id, user_id=user_id)
-        logger.info(f"Transaction '{transaction.id}' recorded for product '{transaction.product_id}' in store '{store_id}'.")
-        return transaction
-    except ValueError as e:
-        await db.rollback()
-        logger.warning(f"Transaction failed for product '{transaction_in.product_id}': {e}")
-        raise BadRequestException(detail=str(e))
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"An unexpected error occurred during transaction processing: {e}", exc_info=True)
-        raise
+    async with db.begin_nested(): # Use a nested transaction or savepoint
+        try:
+            return await crud.create(
+                db=db,
+                transaction_in=transaction_in,
+                user_id=user_id
+            )
+        except ValueError as e:
+            # Business logic errors from CRUD (e.g., insufficient stock)
+            raise BadRequestException(detail=str(e))
+        except IntegrityError:
+            # This can happen if the foreign key for the user/product doesn't exist
+            await db.rollback()
+            raise NotFoundException(detail="The specified user, store, or product does not exist.")
+        except Exception as e:
+            logger.error(f"Unexpected error during transaction processing: {e}", exc_info=True)
+            await db.rollback() # Ensure rollback on unexpected errors
+            raise # Re-raise the original exception to be caught by the generic handler
 
-async def get_all_transactions_service(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
-    """Business logic to retrieve all transactions."""
-    return await crud.get_transactions(db=db, store_id=store_id, skip=skip, limit=limit)
+async def get_all_transactions(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
+    """Retrieves all transactions for a specific store."""
+    return await crud.get_all_by_store(db, store_id, skip, limit)

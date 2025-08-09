@@ -8,37 +8,25 @@ from sqlalchemy.exc import IntegrityError
 from core.exceptions import BadRequestException, ConflictException
 from core.security import hash_password, verify_password
 from . import models, schemas
-from app.user_service.models import User 
-_ = lambda text: text
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    """
-    Retrieves a user by email, eager-loading related roles and store data.
-    Prevents async lazy-loading crashes by using selectinload.
-    """
+async def get_by_email(db: AsyncSession, email: str) -> Optional[models.User]:
+    """Retrieves a user by email, eager-loading related roles and store."""
     statement = (
-        select(User)
-        .where(User.email == email)
-        .options(
-            selectinload(User.roles),
-            selectinload(User.store)
-        )
+        select(models.User)
+        .where(models.User.email == email)
+        .options(selectinload(models.User.roles), selectinload(models.User.store))
     )
     result = await db.execute(statement)
     return result.scalars().first()
 
-async def create_user(db: AsyncSession, *, user_in: schemas.UserCreate) -> models.User:
-    """
-    Creates a new user and then refreshes the user with all relationships
-    loaded to ensure it can be correctly serialized in the API response.
-    """
+async def create(db: AsyncSession, user_in: schemas.UserCreate) -> models.User:
+    """Creates a new user and handles role assignment."""
     role_stmt = select(models.Role).where(models.Role.name == user_in.role_name)
-    role_result = await db.execute(role_stmt)
-    role = role_result.scalar_one_or_none()
+    role = (await db.execute(role_stmt)).scalar_one_or_none()
     if not role:
         raise BadRequestException(detail=f"Role '{user_in.role_name}' does not exist.")
 
-    new_user_id = await generate_user_id(db, role_name=user_in.role_name)
+    new_user_id = await _generate_user_id(db, role_name=user_in.role_name)
 
     db_user = models.User(
         user_id=new_user_id,
@@ -53,36 +41,46 @@ async def create_user(db: AsyncSession, *, user_in: schemas.UserCreate) -> model
     db.add(db_user)
     try:
         await db.commit()
+        await db.refresh(db_user, attribute_names=["roles", "store"])
+        return db_user
     except IntegrityError as e:
         await db.rollback()
-        if "user_email_key" in str(e.orig).lower():
+        if "unique constraint" in str(e).lower() and "email" in str(e).lower():
             raise ConflictException(detail=f"A user with email '{user_in.email}' already exists.")
-        if "user_store_id_fkey" in str(e.orig).lower():
+        if "foreign key constraint" in str(e).lower() and "store_id" in str(e).lower():
             raise BadRequestException(detail=f"The store ID '{user_in.store_id}' does not exist.")
-        raise ConflictException(detail="A database integrity error occurred.")
+        raise ConflictException(detail="A database integrity error occurred during user creation.")
 
-    # --- THIS IS THE CORRECTED LOGIC ---
-    # After the commit, the db_user object is expired. We need to refresh it
-    # to eagerly load the relationships for the response model. This is the
-    # correct way to avoid the MissingGreenlet error.
-    await db.refresh(db_user, attribute_names=["roles", "store"])
-    return db_user
+async def authenticate(db: AsyncSession, email: str, password: str) -> Optional[models.User]:
+    """Authenticates a user by email and password."""
+    user = await get_by_email(db, email=email)
+    if not user or not verify_password(password, user.hashed_password):
+        return None
+    return user
 
+async def update(db: AsyncSession, db_user: models.User, user_in: schemas.UserUpdate) -> models.User:
+    """Updates a user's profile data."""
+    update_data = user_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_user, field, value)
 
-async def generate_user_id(db: AsyncSession, role_name: str) -> str:
-    prefix_map = {
-        "shop_owner": "SISO",
-        "employee": "SIE",
-        "super_admin": "SISA",
-    }
+    db.add(db_user)
+    try:
+        await db.commit()
+        await db.refresh(db_user)
+        return db_user
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictException(detail="Update failed. The new email might already be in use.")
+
+async def _generate_user_id(db: AsyncSession, role_name: str) -> str:
+    """Generates a sequential, prefixed user ID (e.g., SISO001)."""
+    prefix_map = {"shop_owner": "SISO", "employee": "SIE", "super_admin": "SISA"}
     prefix = prefix_map.get(role_name)
     if not prefix:
-        raise BadRequestException(detail=f"Invalid role name: {role_name}")
+        raise BadRequestException(detail=f"Invalid role name for ID generation: {role_name}")
 
-    result = await db.execute(
-        select(models.SequenceTracker).where(models.SequenceTracker.prefix == prefix).with_for_update()
-    )
-    tracker = result.scalar_one_or_none()
+    tracker = await db.get(models.SequenceTracker, prefix, with_for_update=True)
 
     if not tracker:
         tracker = models.SequenceTracker(prefix=prefix, last_value=1)
@@ -92,29 +90,3 @@ async def generate_user_id(db: AsyncSession, role_name: str) -> str:
     db.add(tracker)
     await db.flush()
     return f"{prefix}{tracker.last_value:03d}"
-
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[models.User]:
-    """
-    This function relies on get_user_by_email to correctly load the user
-    and all necessary relationships.
-    """
-    user = await get_user_by_email(db, email=email)
-    if not user or not verify_password(password, user.hashed_password):
-        return None
-    return user
-
-async def update_user(db: AsyncSession, *, db_user: models.User, user_in: schemas.UserUpdate) -> models.User:
-    update_data = user_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_user, field, value)
-
-    db.add(db_user)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise ConflictException(detail="Update failed. The new email might already be in use.")
-        
-    # Refresh to get the latest state and relationships
-    await db.refresh(db_user, attribute_names=["roles", "store"])
-    return db_user
