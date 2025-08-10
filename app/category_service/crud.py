@@ -91,7 +91,7 @@ async def update(db: AsyncSession, db_category: Category, category_in: CategoryU
 
 async def deactivate(db: AsyncSession, db_category: Category, user_id: uuid.UUID) -> Category:
     """Soft deletes a category by marking it inactive."""
-    db_category.deactivate_at = datetime.now(timezone.utc)
+    db_category.deactivated_at = datetime.now(timezone.utc)
     db_category.is_active = False
     db_category.deactivated_by = user_id
 

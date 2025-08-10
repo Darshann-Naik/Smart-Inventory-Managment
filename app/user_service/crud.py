@@ -10,11 +10,11 @@ from core.security import hash_password, verify_password
 from . import models, schemas
 
 async def get_by_email(db: AsyncSession, email: str) -> Optional[models.User]:
-    """Retrieves a user by email, eager-loading related roles and store."""
+    """Retrieves a user by email, eager-loading related roles."""
     statement = (
         select(models.User)
         .where(models.User.email == email)
-        .options(selectinload(models.User.roles), selectinload(models.User.store))
+        .options(selectinload(models.User.roles)) 
     )
     result = await db.execute(statement)
     return result.scalars().first()
@@ -75,7 +75,7 @@ async def update(db: AsyncSession, db_user: models.User, user_in: schemas.UserUp
 
 async def _generate_user_id(db: AsyncSession, role_name: str) -> str:
     """Generates a sequential, prefixed user ID (e.g., SISO001)."""
-    prefix_map = {"shop_owner": "SISO", "employee": "SIE", "super_admin": "SISA"}
+    prefix_map = {"admin": "SISO", "employee": "SIE", "super_admin": "SISA"}
     prefix = prefix_map.get(role_name)
     if not prefix:
         raise BadRequestException(detail=f"Invalid role name for ID generation: {role_name}")

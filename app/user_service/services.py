@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
 
-# CORRECTED: Import 'get' from store_crud with an alias to avoid naming conflicts.
+# Import the get function from store_crud to check for store existence
 from app.store_service import crud as store_crud
 from core.exceptions import (
     BadRequestException,
@@ -19,14 +19,19 @@ from . import crud, models, schemas
 logger = logging.getLogger(__name__)
 
 async def register(db: AsyncSession, user_in: schemas.UserCreate) -> models.User:
-    """Handles business logic for user registration."""
+    """
+    Handles business logic for user registration.
+    Validates that the provided store_id exists before creating the user.
+    """
+    # Check if user already exists
     if await crud.get_by_email(db, email=user_in.email):
         raise ConflictException(detail=f"A user with email '{user_in.email}' already exists.")
 
-    # CORRECTED: Call the standardized 'get' function from store_crud.
+    # CORRECTED: Check if the provided store_id exists
     if not await store_crud.get(db=db, store_id=user_in.store_id):
         raise NotFoundException(resource="Store", resource_id=str(user_in.store_id))
 
+    # The rest of the creation logic is now straightforward
     user = await crud.create(db=db, user_in=user_in)
     logger.info(f"User '{user.email}' registered successfully with user_id '{user.user_id}'.")
     return user

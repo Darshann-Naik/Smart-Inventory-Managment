@@ -17,7 +17,7 @@ router = APIRouter()
     response_model=schemas.Product,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new product",
-    dependencies=[Depends(require_role(["shop_owner", "super_admin"]))],
+    dependencies=[Depends(require_role(["admin", "super_admin"]))],
 )
 async def create_product(
     product_in: schemas.ProductCreate,
@@ -37,14 +37,13 @@ async def create_product(
 async def get_product(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Retrieves details of a specific product.
     - `super_admin` can view deactivated products.
     - Other roles can only view active products.
     """
-    return await services.get_product(db=db, product_id=product_id, current_user=current_user)
+    return await services.get_product(db=db, product_id=product_id)
 
 @router.get(
     "",
@@ -55,20 +54,19 @@ async def list_products(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Retrieves a list of all products for the store.
     - `super_admin` can view deactivated products.
     - Other roles can only view active products.
     """
-    return await services.get_all_products(db=db, current_user=current_user, skip=skip, limit=limit)
+    return await services.get_all_products(db=db, skip=skip, limit=limit)
 
 @router.put(
     "/{product_id}",
     response_model=schemas.Product,
     summary="Update a product",
-    dependencies=[Depends(require_role(["shop_owner", "super_admin"]))],
+    dependencies=[Depends(require_role(["admin", "super_admin"]))],
 )
 async def update_product(
     product_id: uuid.UUID,
@@ -85,7 +83,7 @@ async def update_product(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a product (Soft Delete)",
-    dependencies=[Depends(require_role(["shop_owner", "super_admin"]))],
+    dependencies=[Depends(require_role(["super_admin"]))],
 )
 async def delete_product(
     product_id: uuid.UUID,

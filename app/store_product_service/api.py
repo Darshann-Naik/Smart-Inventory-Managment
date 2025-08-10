@@ -3,26 +3,27 @@ import uuid
 from typing import List
 from fastapi import APIRouter, Depends, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.user_service.models import User
 from core.database import get_db_session
 from . import schemas, services
-# from app.user_service.dependencies import require_role # Import if needed
+from app.user_service.dependencies import get_current_active_user, require_role
 
 router = APIRouter()
 
 @router.post(
-    "/links",
+    "/link",
     response_model=schemas.StoreProduct,
     status_code=status.HTTP_201_CREATED,
-    summary="Link a product to a store"
-    # dependencies=[Depends(require_role(["shop_owner", "admin"]))]
+    summary="Link a product to a store",
+    dependencies=[Depends(require_role(["admin", "super_admin"]))]
 )
-async def link_product_to_store(
+async def link(
     mapping_in: schemas.StoreProductCreate, 
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Create a new link between a product and a store with specific pricing/stock."""
-    return await services.link_product_to_store(db, mapping_in)
+    return await services.link(db, mapping_in,user_id=current_user.id)
 
 @router.get(
     "/stores/{store_id}/products", 
@@ -41,8 +42,8 @@ async def list_products_in_store(
 @router.put(
     "/links/{store_id}/{product_id}", 
     response_model=schemas.StoreProduct,
-    summary="Update a product's details within a store"
-    # dependencies=[Depends(require_role(["shop_owner", "admin"]))]
+    summary="Update a product's details within a store",
+    dependencies=[Depends(require_role(["admin", "super_admin"]))]
 )
 async def update_linked_product_details(
     store_id: uuid.UUID, 
@@ -56,14 +57,15 @@ async def update_linked_product_details(
 @router.delete(
     "/links/{store_id}/{product_id}", 
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Unlink a product from a store"
-    # dependencies=[Depends(require_role(["shop_owner", "admin"]))]
+    summary="Unlink a product from a store",
+    dependencies=[Depends(require_role(["super_admin"]))]
 )
-async def unlink_product_from_store(
+async def unlink(
     store_id: uuid.UUID, 
     product_id: uuid.UUID, 
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Remove the link between a product and a store."""
-    await services.unlink_product_from_store(db, store_id, product_id)
+    await services.unlink(db, store_id, product_id,user_id=current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

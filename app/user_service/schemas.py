@@ -10,12 +10,12 @@ class UserBase(BaseModel):
     last_name: Optional[str] = None
 
 # Schema for creating a new user (registration)
+# CORRECTED: Reverted to use store_id instead of store_name.
 class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="User's email address.")
     password: str = Field(..., min_length=8, description="User's password (min 8 characters).")
     first_name: str
     last_name: str
-    store_id: UUID
     role_name: str
 
 # Schema for updating a user's profile

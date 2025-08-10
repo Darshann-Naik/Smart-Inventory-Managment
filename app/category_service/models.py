@@ -15,14 +15,14 @@ class Category(SQLModel, table=True):
     prefix: str = Field(max_length=4, unique=True, description="A unique, global prefix for SKU generation (e.g., 'GROC')")
     parent_id: Optional[uuid.UUID] = Field(default=None, foreign_key="category.id", nullable=True)
     is_active: bool = Field(default=True)
-    created_by:uuid.UUID = Field(foreign_key="user.id", index=True)
-    deactivated_by:uuid.UUID = Field(foreign_key="user.id", index=True, default=None,)
-    deactivate_at: Optional[datetime] = Field(
-        default=None,
-        description="Timestamp for soft delete",
-        # CORRECTED: The 'index=True' parameter has been moved inside the sa_column's Column object.
-        sa_column=Column(DateTime(timezone=True), index=True)
-    )
+    created_by:uuid.UUID = Field(foreign_key="user.id", index=True,default=None)
+    deactivated_by:uuid.UUID = Field(foreign_key="user.id", index=True, default=None)
+    deactivated_at: Optional[datetime] = Field(
+    default=None,
+    description="Timestamp for soft delete",
+    sa_column=Column(DateTime(timezone=True), index=True)
+)
+
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

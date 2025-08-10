@@ -8,43 +8,59 @@ from .models import Product
 from .schemas import ProductUpdate
 
 
-async def get_by_sku(db: AsyncSession, sku: str) -> Optional[Product]:
-    statement = select(Product).where(func.lower(Product.sku) == sku.lower())
-    result = await db.execute(statement)
-    return result.scalar_one_or_none()
 
-async def get_by_name_and_category(db: AsyncSession, name: str, category_id: uuid.UUID) -> Optional[Product]:
+async def get_by_sku(db: AsyncSession, sku: str) -> Optional[Product]:
     statement = select(Product).where(
-        func.lower(Product.name) == name.lower(),
-        Product.category_id == category_id
+        func.lower(Product.sku) == sku.lower(),
+        Product.is_active == True
     )
     result = await db.execute(statement)
     return result.scalar_one_or_none()
 
+
+async def get_by_name_and_category(db: AsyncSession, name: str, category_id: uuid.UUID) -> Optional[Product]:
+    statement = select(Product).where(
+        func.lower(Product.name) == name.lower(),
+        Product.category_id == category_id,
+        Product.is_active == True
+    )
+    result = await db.execute(statement)
+    return result.scalar_one_or_none()
+
+
 async def get_last_by_sku_prefix(db: AsyncSession, sku_prefix: str) -> Optional[Product]:
     statement = (
         select(Product)
-        .where(Product.sku.like(f"{sku_prefix}%"))
+        .where(
+            Product.sku.like(f"{sku_prefix}%"),
+            Product.is_active == True
+        )
         .order_by(Product.created_at.desc())
         .limit(1)
     )
     result = await db.execute(statement)
     return result.scalar_one_or_none()
 
-async def get_by_id(db: AsyncSession, product_id: uuid.UUID, is_active: Optional[bool] = None) -> Optional[Product]:
-    statement = select(Product).where(Product.id == product_id)
-    if is_active is not None:
-        statement = statement.where(Product.is_active == is_active)
+
+async def get_by_id(db: AsyncSession, product_id: uuid.UUID) -> Optional[Product]:
+    statement = select(Product).where(
+        Product.id == product_id,
+        Product.is_active == True
+    )
     result = await db.execute(statement)
     return result.scalar_one_or_none()
 
-async def get_all(db: AsyncSession, skip: int, limit: int, is_active: Optional[bool] = None) -> List[Product]:
-    statement = select(Product)
-    if is_active is not None:
-        statement = statement.where(Product.is_active == is_active)
-    statement = statement.offset(skip).limit(limit)
+
+async def get_all(db: AsyncSession, skip: int, limit: int) -> List[Product]:
+    statement = (
+        select(Product)
+        .where(Product.is_active == True)
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(statement)
     return result.scalars().all()
+
 
 async def create(db: AsyncSession, product_data: dict) -> Product:
     db_product = Product(**product_data)

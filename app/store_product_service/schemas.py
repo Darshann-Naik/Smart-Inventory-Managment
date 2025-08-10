@@ -21,6 +21,7 @@ class StoreProductUpdate(BaseModel):
     max_quantity: Optional[int] = Field(default=None, ge=0)
 
 class StoreProduct(StoreProductBase):
+    id: uuid.UUID
     store_id: uuid.UUID
     product_id: uuid.UUID
     created_at: datetime

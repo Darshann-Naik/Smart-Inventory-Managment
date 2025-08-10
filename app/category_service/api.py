@@ -18,7 +18,7 @@ router = StandardAPIRouter(tags=["Product Categories (Admin)"])
     response_model=schemas.Category,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new universal product category",
-    dependencies=[Depends(require_role(["super_admin"]))],
+    dependencies=[Depends(require_role(["admin","super_admin"]))],
 )
 async def create_category(
     category_in: schemas.CategoryCreate,
@@ -65,7 +65,7 @@ async def list_categories(
     "/{category_id}",
     response_model=schemas.Category,
     summary="Update a product category",
-    dependencies=[Depends(require_role(["shop_owner", "super_admin"]))],
+    dependencies=[Depends(require_role(["admin", "super_admin"]))],
 )
 async def update_category(
     category_id: uuid.UUID,

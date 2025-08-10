@@ -6,27 +6,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db_session
 from . import schemas, services
-from app.user_service.dependencies import require_role
+from app.user_service.dependencies import get_current_active_user, require_role
+from app.user_service.models import User
 
 router = APIRouter()
 
 @router.post(
     "",
-    response_model=schemas.Store,
+    response_model=schemas.StoreOut, # Use detailed output schema
     status_code=status.HTTP_201_CREATED,
     summary="Create a new store",
-    dependencies=[Depends(require_role(["super_admin"]))],
+    dependencies=[Depends(require_role(["admin", "super_admin"]))]
 )
 async def create_store(
     store_in: schemas.StoreCreate,
     db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Create a new store. (Admin only)"""
-    return await services.create_store(db=db, store_in=store_in)
+    """Create a new store. Requires 'admin' or 'super_admin' role."""
+    return await services.create_store(db=db, store_in=store_in, user_id=current_user.id)
 
 @router.get(
     "",
-    response_model=List[schemas.Store],
+    response_model=List[schemas.StoreOut], # Use detailed output schema
     summary="List all stores"
 )
 async def list_stores(
@@ -34,12 +36,12 @@ async def list_stores(
     limit: int = 100,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Retrieve all stores with pagination."""
+    """Retrieve all active stores with pagination."""
     return await services.get_all_stores(db, skip=skip, limit=limit)
 
 @router.get(
     "/{store_id}",
-    response_model=schemas.Store,
+    response_model=schemas.StoreOut, # Use detailed output schema
     summary="Get a specific store"
 )
 async def get_store(
@@ -51,28 +53,32 @@ async def get_store(
 
 @router.put(
     "/{store_id}",
-    response_model=schemas.Store,
+    response_model=schemas.StoreOut, # Use detailed output schema
     summary="Update a store",
-    dependencies=[Depends(require_role(["super_admin"]))],
+    dependencies=[Depends(require_role(["admin", "super_admin"]))]
 )
 async def update_store(
     store_id: uuid.UUID,
     store_in: schemas.StoreUpdate,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Update a specific store by its ID. (Admin only)"""
+    """Update a specific store by its ID. Requires 'admin' or 'super_admin' role."""
     return await services.update_store(db=db, store_id=store_id, store_in=store_in)
 
 @router.delete(
     "/{store_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a store",
+    summary="Deactivate a store",
     dependencies=[Depends(require_role(["super_admin"]))],
 )
-async def delete_store(
+async def deactivate_store(
     store_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Delete a specific store by its ID. (Admin only)"""
-    await services.delete_store(db=db, store_id=store_id)
+    """
+    Deactivates a store. This is a soft delete. Requires 'super_admin' role.
+    The store cannot be deactivated if it has associated users, products, or transactions.
+    """
+    await services.deactivate(db=db, store_id=store_id, user_id=current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

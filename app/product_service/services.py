@@ -64,20 +64,18 @@ async def create_product(db: AsyncSession, product_in: schemas.ProductCreate, us
         await db.rollback()
         raise ConflictException(detail=f"A product with the generated SKU '{product_data['sku']}' already exists. Please try again.")
 
-async def get_product(db: AsyncSession, product_id: uuid.UUID, current_user: User) -> models.Product:
+async def get_product(db: AsyncSession, product_id: uuid.UUID) -> models.Product:
     """
     Business logic to retrieve a single product.
     """
-    is_active = None if "super_admin" in current_user.roles else True
-    product = await crud.get_by_id(db=db, product_id=product_id, is_active=is_active)
+    product = await crud.get_by_id(db=db, product_id=product_id)
     if not product:
         raise NotFoundException(resource="Product", resource_id=str(product_id))
     return product
 
-async def get_all_products(db: AsyncSession, current_user: User, skip: int, limit: int) -> List[models.Product]:
+async def get_all_products(db: AsyncSession,  skip: int, limit: int) -> List[models.Product]:
     """Business logic to retrieve all products for a store."""
-    is_active = None if "super_admin" in current_user.roles else True
-    products = await crud.get_all(db=db, skip=skip, limit=limit, is_active=is_active)
+    products = await crud.get_all(db=db, skip=skip, limit=limit)
     return products
 
 async def update_product(db: AsyncSession, product_id: uuid.UUID, product_in: schemas.ProductUpdate,user_id:uuid.UUID) -> models.Product:
