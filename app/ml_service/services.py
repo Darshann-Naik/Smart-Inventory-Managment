@@ -3,10 +3,12 @@ import logging
 from uuid import UUID
 from app.transaction_service.models import InventoryTransaction
 from .pipeline import get_ml_pipeline, save_model, load_model
-from .schemas import StockPrediction
-from datetime import datetime
+from fastapi import APIRouter
+from datetime import date, timedelta
+from .schemas import StockPrediction, StockPredictionResponse
 
 logger = logging.getLogger(__name__)
+router = APIRouter()
 
 # --- GLOBAL MODEL OBJECT ---
 # The model is loaded into memory once when the application starts.
@@ -47,27 +49,45 @@ async def train_model(transaction: InventoryTransaction, new_stock_level: int):
     except Exception as e:
         logger.error(f"Failed to train ML model with transaction {transaction.id}: {e}", exc_info=True)
 
-async def predict_stock(store_id: UUID, product_id: UUID) -> StockPrediction:
+
+async def predict_stock_for_range(
+    store_id: UUID,
+    product_id: UUID,
+    start_date: date,
+    end_date: date
+) -> StockPredictionResponse:
     """
-    Predicts the stock level for a given store and product.
-
-    NOTE: This is a simplified prediction for demonstration. A robust prediction
-    would require creating features that represent the *current* state (e.g., time of day,
-    recent sales velocity, etc.), not just past transactions.
+    Predicts the stock level for each day within a given date range.
+    
+    NOTE: This simple model assumes a typical sale occurs each day to generate a trend.
+    A more advanced model could learn to predict days with no sales or with purchases.
     """
-    # For this example, we'll create some plausible features for a "next transaction".
-    dummy_features = {
-        "quantity": 5,  # An average sale size
-        "day_of_week": datetime.utcnow().weekday(),
-        "month": datetime.utcnow().month,
-        "is_sale": 1,
-        "unit_cost": 0.0 # Unknown for a future sale
-    }
+    predictions = []
+    current_date = start_date
+    
+    while current_date <= end_date:
+        # Create plausible features for a hypothetical transaction on the current_date.
+        hypothetical_features = {
+            "quantity": 5,  # An average sale size assumption
+            "day_of_week": current_date.weekday(),
+            "month": current_date.month,
+            "year": current_date.year,
+            "is_sale": 1,
+            "unit_cost": 0.0 # Assuming cost is not a factor for a future sale prediction
+        }
 
-    prediction = ml_model.predict_one(dummy_features)
+        prediction_value = ml_model.predict_one(hypothetical_features)
+        
+        daily_prediction = StockPrediction(
+            prediction_date=current_date,
+            predicted_stock=prediction_value if prediction_value > 0 else 0.0
+        )
+        predictions.append(daily_prediction)
+        
+        current_date += timedelta(days=1)
 
-    return StockPrediction(
+    return StockPredictionResponse(
         store_id=store_id,
         product_id=product_id,
-        predicted_stock=prediction if prediction > 0 else 0.0 # Stock can't be negative
+        predictions=predictions
     )
