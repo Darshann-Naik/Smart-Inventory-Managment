@@ -12,8 +12,7 @@ from app.product_service.models import Product
 
 async def get(db: AsyncSession, category_id: uuid.UUID) -> Optional[Category]:
     """
-    Retrieves a single active category by ID, eagerly loading its active children using a JOIN
-    to prevent lazy-loading errors during serialization.
+    Retrieves a single active category by ID, eagerly loading its active children.
     """
     statement = (
         select(Category)
@@ -21,7 +20,6 @@ async def get(db: AsyncSession, category_id: uuid.UUID) -> Optional[Category]:
         .options(joinedload(Category.children.and_(Category.is_active == True)))
     )
     result = await db.execute(statement)
-    # Use .unique() to handle the JOIN correctly and avoid duplicate parent objects
     return result.unique().scalar_one_or_none()
 
 
@@ -39,16 +37,14 @@ async def get_by_prefix(db: AsyncSession, prefix: str) -> Optional[Category]:
 
 async def get_all(db: AsyncSession) -> List[Category]:
     """
-    Retrieves all active categories, eagerly loading their children using a JOIN
-    to prevent lazy-loading errors during serialization.
+    Retrieves all active categories, eagerly loading their children.
     """
     statement = (
         select(Category)
         .options(joinedload(Category.children))
-        .where(Category.is_active == True)  # Only active categories
+        .where(Category.is_active == True)
     )
     result = await db.execute(statement)
-    # Use .unique() to handle the JOIN correctly and avoid duplicate parent objects
     return result.unique().scalars().all()
 
 
@@ -58,24 +54,12 @@ async def create(db: AsyncSession, category_in: dict, user_id:uuid.UUID) -> Cate
     db_category.prefix = db_category.prefix.upper()
     db_category.created_by=user_id
     db.add(db_category)
-    
-    # CORRECTED: Flush the session to get the auto-generated ID from the database
-    # before the transaction is committed and the object instance is expired.
     await db.flush()
-    
-    category_id = db_category.id  # Safely capture the ID.
-    
-    await db.commit() # Commit the transaction.
-    
-    # The db_category object is now expired. We must re-fetch it using the captured ID.
-    created_category = await get(db, category_id=category_id)
-    return created_category
+    await db.refresh(db_category)
+    return db_category
 
 async def update(db: AsyncSession, db_category: Category, category_in: CategoryUpdate) -> Category:
     """Updates an existing category."""
-    # Capture the ID before the object's state is modified and potentially expired.
-    category_id = db_category.id
-    
     update_data = category_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_category, key, value)
@@ -83,11 +67,9 @@ async def update(db: AsyncSession, db_category: Category, category_in: CategoryU
         db_category.prefix = db_category.prefix.upper()
         
     db.add(db_category)
-    await db.commit()
-    
-    # Re-fetch the object using the captured ID to ensure it's fully loaded.
-    updated_category = await get(db, category_id=category_id)
-    return updated_category
+    await db.flush()
+    await db.refresh(db_category)
+    return db_category
 
 async def deactivate(db: AsyncSession, db_category: Category, user_id: uuid.UUID) -> Category:
     """Soft deletes a category by marking it inactive."""
@@ -96,7 +78,7 @@ async def deactivate(db: AsyncSession, db_category: Category, user_id: uuid.UUID
     db_category.deactivated_by = user_id
 
     db.add(db_category)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_category)
     return db_category
 

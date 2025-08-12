@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import crud, models, schemas
 from core.exceptions import BadRequestException, NotFoundException
-
+from app.ml_service import services as ml_services
 logger = logging.getLogger(__name__)
 
 async def create_transaction(
@@ -19,14 +19,18 @@ async def create_transaction(
     Service layer for recording an inventory transaction.
     Relies on the session-level transaction from the dependency.
     """
-    # REMOVED: All 'async with db.begin()' or 'db.begin_nested()' blocks are gone.
     try:
-        # The transaction is already managed by the get_db_session dependency.
-        transaction = await crud.create(
+        # The crud function now returns the transaction AND the new stock level
+        transaction, new_stock_level = await crud.create(
             db=db,
             transaction_in=transaction_in,
             user_id=user_id
         )
+
+        # --- THIS IS THE INTEGRATION POINT ---
+        # Asynchronously tell the ML service to learn from what just happened.
+        # This won't block the user's request.
+        await ml_services.train_model(transaction, new_stock_level)
         # The dependency will handle the commit when the request successfully finishes.
         return transaction
     except ValueError as e:

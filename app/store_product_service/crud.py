@@ -32,12 +32,16 @@ async def get_all_by_store(db: AsyncSession, store_id: uuid.UUID, skip: int, lim
     result = await db.execute(statement)
     return result.scalars().all()
 
-async def create(db: AsyncSession, mapping_in: schemas.StoreProductCreate,user_id:uuid.UUID) -> models.StoreProduct:
+async def create(db: AsyncSession, mapping_in: schemas.StoreProductCreate, user_id: uuid.UUID) -> models.StoreProduct:
     """Creates a new link between a store and a product."""
-    db_mapping = models.StoreProduct.model_validate(mapping_in)
-    db_mapping.created_by=user_id
+    # Create the model instance, adding the server-side `created_by` field
+    db_mapping = models.StoreProduct.model_validate(
+        mapping_in,
+        update={'created_by': user_id}
+    )
+    
     db.add(db_mapping)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_mapping)
     return db_mapping
 
@@ -47,7 +51,7 @@ async def update(db: AsyncSession, db_mapping: models.StoreProduct, update_data:
     for key, value in update_dict.items():
         setattr(db_mapping, key, value)
     db.add(db_mapping)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_mapping)
     return db_mapping
 
@@ -58,7 +62,7 @@ async def deactivate(db: AsyncSession, db_mapping: models.StoreProduct, user_id:
     db_mapping.deactivated_by = user_id
 
     db.add(db_mapping)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_mapping)
     return db_mapping
 

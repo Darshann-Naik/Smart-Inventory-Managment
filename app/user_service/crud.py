@@ -34,22 +34,13 @@ async def create(db: AsyncSession, user_in: schemas.UserCreate) -> models.User:
         hashed_password=hash_password(user_in.password),
         first_name=user_in.first_name,
         last_name=user_in.last_name,
-        store_id=user_in.store_id,
         roles=[role],
     )
 
     db.add(db_user)
-    try:
-        await db.commit()
-        await db.refresh(db_user, attribute_names=["roles", "store"])
-        return db_user
-    except IntegrityError as e:
-        await db.rollback()
-        if "unique constraint" in str(e).lower() and "email" in str(e).lower():
-            raise ConflictException(detail=f"A user with email '{user_in.email}' already exists.")
-        if "foreign key constraint" in str(e).lower() and "store_id" in str(e).lower():
-            raise BadRequestException(detail=f"The store ID '{user_in.store_id}' does not exist.")
-        raise ConflictException(detail="A database integrity error occurred during user creation.")
+    await db.flush()
+    await db.refresh(db_user)
+    return db_user
 
 async def authenticate(db: AsyncSession, email: str, password: str) -> Optional[models.User]:
     """Authenticates a user by email and password."""
@@ -65,13 +56,9 @@ async def update(db: AsyncSession, db_user: models.User, user_in: schemas.UserUp
         setattr(db_user, field, value)
 
     db.add(db_user)
-    try:
-        await db.commit()
-        await db.refresh(db_user)
-        return db_user
-    except IntegrityError:
-        await db.rollback()
-        raise ConflictException(detail="Update failed. The new email might already be in use.")
+    await db.flush()
+    await db.refresh(db_user)
+    return db_user
 
 async def _generate_user_id(db: AsyncSession, role_name: str) -> str:
     """Generates a sequential, prefixed user ID (e.g., SISO001)."""

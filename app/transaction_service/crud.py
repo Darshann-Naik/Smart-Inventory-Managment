@@ -8,7 +8,6 @@ from . import models, schemas
 from app.store_product_service.models import StoreProduct
 
 async def create(db: AsyncSession, transaction_in: schemas.TransactionCreate, user_id: uuid.UUID) -> models.InventoryTransaction:
-    # ... (rest of the function is correct and remains unchanged) ...
     result = await db.execute(
         select(StoreProduct).where(
             StoreProduct.store_id == transaction_in.store_id,
@@ -41,7 +40,10 @@ async def create(db: AsyncSession, transaction_in: schemas.TransactionCreate, us
     db.add(db_transaction)
     await db.flush()
     await db.refresh(db_transaction)
-    return db_transaction
+    
+    # --- THIS IS THE KEY CHANGE ---
+    # Return both the transaction and the new stock level.
+    return db_transaction, store_product.stock
 
 
 async def get_all_by_store(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:

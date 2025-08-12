@@ -65,7 +65,7 @@ async def get_all(db: AsyncSession, skip: int, limit: int) -> List[Product]:
 async def create(db: AsyncSession, product_data: dict) -> Product:
     db_product = Product(**product_data)
     db.add(db_product)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_product)
     return db_product
 
@@ -73,21 +73,19 @@ async def update(db: AsyncSession, db_product: Product, product_in: ProductUpdat
     update_data = product_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_product, key, value)
-    # If product is being deactivated, set deactivated_by
     if "is_active" in update_data and update_data["is_active"] is False:
         db_product.deactivated_by = user_id
         db_product.deactivate_at = datetime.now(timezone.utc)
     else:
-        # Optionally clear deactivated_by if product is reactivated
         db_product.deactivated_by = None    
     db.add(db_product)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_product)
     return db_product
 
 async def remove(db: AsyncSession, db_product: Product) -> None:
     await db.delete(db_product)
-    await db.commit()
+    await db.flush()
 
 async def deactivate(db: AsyncSession, db_product: Product,user_id:uuid.UUID) -> Product:
     """Soft delete a product by setting the deleted_at timestamp."""
@@ -95,6 +93,6 @@ async def deactivate(db: AsyncSession, db_product: Product,user_id:uuid.UUID) ->
     db_product.is_active = False
     db_product.deactivated_by=user_id
     db.add(db_product)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_product)
     return db_product

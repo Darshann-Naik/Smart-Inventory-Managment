@@ -44,5 +44,7 @@ class Settings(BaseSettings):
     AWS_S3_BUCKET_NAME: str = "your-s3-bucket-name"
     AWS_REGION: str = "ap-south-1"
 
+    # ML Settings
+    ML_MODEL_PATH: str = "ml_model.pkl"
 
 settings = Settings()
