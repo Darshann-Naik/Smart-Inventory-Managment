@@ -50,3 +50,21 @@ async def list_transactions_for_store(
     """
     # Optional: Add service-layer logic to check if current_user has access to store_id
     return await services.get_all_transactions(db, store_id, skip, limit)
+
+@router.get(
+    "/{store_id}/{product_id}",
+    response_model=List[schemas.Transaction],
+    summary="List all transactions for a specific product in a store"
+)
+async def list_transactions_for_product_in_store(
+    store_id: uuid.UUID,
+    product_id: uuid.UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user) # For authorization
+):
+    """
+    Retrieves a list of all inventory transactions for a specific product within a specific store.
+    """
+    return await services.get_all_transactions_for_product(db, store_id, product_id, skip, limit)

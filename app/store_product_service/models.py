@@ -30,7 +30,7 @@ class StoreProduct(SQLModel, table=True):
     created_by: uuid.UUID = Field(foreign_key="user.id", index=True)
     deactivated_by: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id", index=True)
     
-    deactivate_at: Optional[datetime] = Field(default=None, description="Timestamp for soft delete", sa_column=Column(DateTime(timezone=True), index=True))
+    deactivated_at: Optional[datetime] = Field(default=None, description="Timestamp for soft delete", sa_column=Column(DateTime(timezone=True), index=True))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime(timezone=True), nullable=False))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime(timezone=True), nullable=False, onupdate=lambda: datetime.now(timezone.utc)))
 

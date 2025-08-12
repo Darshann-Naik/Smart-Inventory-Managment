@@ -10,30 +10,38 @@ from core.exceptions import BadRequestException, NotFoundException
 
 logger = logging.getLogger(__name__)
 
-async def create_transaction(db: AsyncSession, transaction_in: schemas.TransactionCreate, user_id: uuid.UUID) -> models.InventoryTransaction:
+async def create_transaction(
+    db: AsyncSession,
+    transaction_in: schemas.TransactionCreate,
+    user_id: uuid.UUID
+) -> models.InventoryTransaction:
     """
     Service layer for recording an inventory transaction.
-    Wraps the atomic CRUD operation in a transaction block.
+    Relies on the session-level transaction from the dependency.
     """
-    async with db.begin_nested(): # Use a nested transaction or savepoint
-        try:
-            return await crud.create(
-                db=db,
-                transaction_in=transaction_in,
-                user_id=user_id
-            )
-        except ValueError as e:
-            # Business logic errors from CRUD (e.g., insufficient stock)
-            raise BadRequestException(detail=str(e))
-        except IntegrityError:
-            # This can happen if the foreign key for the user/product doesn't exist
-            await db.rollback()
-            raise NotFoundException(detail="The specified user, store, or product does not exist.")
-        except Exception as e:
-            logger.error(f"Unexpected error during transaction processing: {e}", exc_info=True)
-            await db.rollback() # Ensure rollback on unexpected errors
-            raise # Re-raise the original exception to be caught by the generic handler
+    # REMOVED: All 'async with db.begin()' or 'db.begin_nested()' blocks are gone.
+    try:
+        # The transaction is already managed by the get_db_session dependency.
+        transaction = await crud.create(
+            db=db,
+            transaction_in=transaction_in,
+            user_id=user_id
+        )
+        # The dependency will handle the commit when the request successfully finishes.
+        return transaction
+    except ValueError as e:
+        # Raising an exception will cause the dependency to roll back the transaction.
+        raise BadRequestException(detail=str(e))
+    except IntegrityError:
+        raise NotFoundException(detail="The specified user, store, or product does not exist.")
+    except Exception as e:
+        logger.error(f"Unexpected error during transaction processing: {e}", exc_info=True)
+        raise
 
 async def get_all_transactions(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
     """Retrieves all transactions for a specific store."""
     return await crud.get_all_by_store(db, store_id, skip, limit)
+
+async def get_all_transactions_for_product(db: AsyncSession, store_id: uuid.UUID, product_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
+    """Retrieves all transactions for a specific product within a store."""
+    return await crud.get_all_by_store_and_product(db, store_id, product_id, skip, limit)

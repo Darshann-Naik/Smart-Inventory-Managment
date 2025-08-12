@@ -1,9 +1,8 @@
+# /core/database.py
 from typing import AsyncGenerator
-
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel, text
-
 from core.config import settings
 
 engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG, future=True)
@@ -13,19 +12,24 @@ AsyncSessionFactory = sessionmaker(
 )
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Provides a transactionally-scoped database session per request.
+    """
     async with AsyncSessionFactory() as session:
-        yield session
+        async with session.begin(): # This starts the transaction
+            try:
+                yield session
+                # If no exception, the context manager will commit automatically.
+            except:
+                # If an exception occurs, the context manager will roll back.
+                await session.rollback()
+                raise
 
+# ... (rest of the file remains the same) ...
 async def drop_db_and_tables():
-    """
-    Drops all tables in dependency order with CASCADE to avoid FK constraint errors.
-    USE WITH CAUTION.
-    """
     async with engine.begin() as conn:
-        # Drop tables in order of dependency - children first, then parents.
-        # Replace table names with your actual table names as needed.
         await conn.execute(text("DROP TABLE IF EXISTS storeproduct CASCADE"))
-        await conn.execute(text("DROP TABLE IF EXISTS transaction CASCADE"))
+        await conn.execute(text("DROP TABLE IF EXISTS inventorytransaction CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS product CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS category CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS store CASCADE"))
@@ -33,7 +37,6 @@ async def drop_db_and_tables():
         await conn.execute(text("DROP TABLE IF EXISTS role CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS userrolelink CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS sequencetracker CASCADE"))
-        # Add any other tables you have
 
 async def create_db_and_tables():
     async with engine.begin() as conn:

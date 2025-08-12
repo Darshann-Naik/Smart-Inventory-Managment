@@ -21,7 +21,7 @@ class TransactionCreate(TransactionBase):
 class Transaction(TransactionBase):
     id: uuid.UUID
     recorded_by_user_id: uuid.UUID
-    quantity_change: int
+    quantity: int
     total_amount: float
     timestamp: datetime
 
