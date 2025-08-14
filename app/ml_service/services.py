@@ -1,54 +1,48 @@
 # /app/ml_service/services.py
 import logging
 from uuid import UUID
-from app.transaction_service.models import InventoryTransaction
+from datetime import datetime, timedelta, date
+from app.transaction_service import models as transaction_models # Use alias for clarity
 from .pipeline import get_ml_pipeline, save_model, load_model
-from fastapi import APIRouter
-from datetime import date, timedelta
 from .schemas import StockPrediction, StockPredictionResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
 
 # --- GLOBAL MODEL OBJECT ---
-# The model is loaded into memory once when the application starts.
 ml_model = load_model()
 if ml_model is None:
     ml_model = get_ml_pipeline()
 
-def get_features(transaction: InventoryTransaction) -> dict:
+def get_features(transaction: transaction_models.InventoryTransaction) -> dict:
     """
     Extracts a feature dictionary from a raw transaction object.
-    This is a crucial step to translate our application data into something
-    the model can understand (numbers!).
+    This version is enhanced to use the more explicit price, cost, and discount fields.
     """
+    is_sale = 1 if transaction.transaction_type == transaction_models.TransactionType.SALE else 0
+    is_purchase = 1 if transaction.transaction_type == transaction_models.TransactionType.PURCHASE else 0
+
     return {
         "quantity": abs(transaction.quantity),
         "day_of_week": transaction.timestamp.weekday(),
         "month": transaction.timestamp.month,
-        "year": transaction.timestamp.year, 
-        "is_sale": 1 if transaction.quantity < 0 else 0,
-        "unit_cost": transaction.unit_cost or 0.0
+        "year": transaction.timestamp.year,
+        "is_sale": is_sale,
+        "is_purchase": is_purchase,
+        # Use the specific price/cost field depending on the transaction type for better learning
+        "price_or_cost": transaction.unit_price_at_sale if is_sale else transaction.unit_cost or 0.0,
+        "discount": transaction.discount or 0.0
     }
 
-async def train_model(transaction: InventoryTransaction, new_stock_level: int):
-    """
-    Incrementally trains the model with a new transaction.
-    This is designed to be called in the background so it doesn't slow down the user's request.
-    """
+async def train_model(transaction: transaction_models.InventoryTransaction, new_stock_level: int):
+    """Incrementally trains the model with a new transaction."""
     try:
         features = get_features(transaction)
         target = new_stock_level
-
-        # The core of River: learn from one new example.
         ml_model.learn_one(features, target)
-
-        # Save the updated model's "brain" for the next time the app starts.
         save_model(ml_model)
         logger.info(f"ML model successfully updated with transaction {transaction.id}")
     except Exception as e:
         logger.error(f"Failed to train ML model with transaction {transaction.id}: {e}", exc_info=True)
-
 
 async def predict_stock_for_range(
     store_id: UUID,
@@ -58,9 +52,6 @@ async def predict_stock_for_range(
 ) -> StockPredictionResponse:
     """
     Predicts the stock level for each day within a given date range.
-    
-    NOTE: This simple model assumes a typical sale occurs each day to generate a trend.
-    A more advanced model could learn to predict days with no sales or with purchases.
     """
     predictions = []
     current_date = start_date
@@ -68,12 +59,14 @@ async def predict_stock_for_range(
     while current_date <= end_date:
         # Create plausible features for a hypothetical transaction on the current_date.
         hypothetical_features = {
-            "quantity": 5,  # An average sale size assumption
+            "quantity": 5, # An average sale size assumption
             "day_of_week": current_date.weekday(),
             "month": current_date.month,
             "year": current_date.year,
             "is_sale": 1,
-            "unit_cost": 0.0 # Assuming cost is not a factor for a future sale prediction
+            "is_purchase": 0,
+            "price_or_cost": 0.0, # Price is unknown for a future sale, model will learn this
+            "discount": 0.0
         }
 
         prediction_value = ml_model.predict_one(hypothetical_features)

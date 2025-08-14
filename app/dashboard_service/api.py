@@ -1,12 +1,12 @@
 # /app/dashboard_service/api.py
 import uuid
-from datetime import date, timedelta
+from datetime import date
 from typing import List
 from fastapi import APIRouter, Depends, Query
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db_session
-from app.user_service.dependencies import get_current_active_user, require_role
+from app.user_service.dependencies import require_role
 from . import schemas, services
 
 router = APIRouter()
@@ -40,6 +40,24 @@ async def get_sales_over_time(
     return await services.get_sales_over_time(db, store_id, start_date, end_date)
 
 @router.get(
+    "/profit-summary",
+    response_model=schemas.ProfitSummary,
+    summary="Get Profit and Revenue Summary",
+    dependencies=[Depends(require_role(["admin", "super_admin"]))]
+)
+async def get_profit_summary(
+    store_id: uuid.UUID,
+    start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="End date (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Calculates total revenue, cost of goods sold (COGS), gross profit,
+    and profit margin for a given period.
+    """
+    return await services.get_profit_summary(db, store_id, start_date, end_date)
+
+@router.get(
     "/top-performing-products",
     response_model=List[schemas.ProductPerformance],
     summary="Get Top Performing Products",
@@ -68,4 +86,3 @@ async def get_low_stock_products(
 ):
     """Identifies products that are at or below their reorder point."""
     return await services.get_low_stock_products(db, store_id, page, size)
-

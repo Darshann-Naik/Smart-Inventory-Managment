@@ -1,5 +1,5 @@
 # /app/dashboard_service/schemas.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import date
 from typing import List, Optional
@@ -18,13 +18,19 @@ class TimeSeriesDataPoint(BaseModel):
     timestamp: date
     value: float
 
-# --- Schemas for Inventory Insights ---
+# --- Schemas for Profit & Cost Analysis ---
 
-class InventorySummary(BaseModel):
-    """A snapshot of the current inventory state."""
-    total_stock_quantity: int
-    total_stock_value: float
-    out_of_stock_products_count: int
+class ProfitSummary(BaseModel):
+    """Summary of profit metrics over a period."""
+    total_revenue: float
+    total_cogs: float # Cost of Goods Sold
+    gross_profit: float
+    gross_profit_margin: float # In percentage
+    start_date: date
+    end_date: date
+    is_estimated: bool = Field(..., description="True if some transactions lacked cost data, making profit an estimate.")
+
+# --- Schemas for Inventory Insights ---
 
 class ProductPerformance(BaseModel):
     """Details of a top-performing product."""
@@ -41,12 +47,3 @@ class LowStockProduct(BaseModel):
     sku: str
     current_stock: int
     reorder_point: int
-
-# --- Schemas for AI/Futuristic Endpoints ---
-
-class SalesForecast(BaseModel):
-    """Represents a sales forecast for a product."""
-    product_id: UUID
-    product_name: str
-    forecast: List[TimeSeriesDataPoint]
-

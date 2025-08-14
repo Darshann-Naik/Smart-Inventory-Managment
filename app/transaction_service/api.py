@@ -24,7 +24,9 @@ async def record_transaction(
 ):
     """
     Records a new inventory transaction (SALE, PURCHASE, or ADJUSTMENT).
-    This endpoint is transactional and will update stock levels atomically.
+    This endpoint is transactional and will update stock levels and costs atomically.
+    - For a SALE, `unit_cost` is ignored; the price is fetched from the system.
+    - For a PURCHASE, `unit_cost` is required.
     """
     return await services.create_transaction(
         db=db,
@@ -42,13 +44,10 @@ async def list_transactions_for_store(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user) # For authorization
 ):
     """
     Retrieves a list of all inventory transactions for a specific store.
-    (In a real app, you would add role checks here to ensure the user can view these transactions).
     """
-    # Optional: Add service-layer logic to check if current_user has access to store_id
     return await services.get_all_transactions(db, store_id, skip, limit)
 
 @router.get(
@@ -62,9 +61,9 @@ async def list_transactions_for_product_in_store(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user) # For authorization
 ):
     """
-    Retrieves a list of all inventory transactions for a specific product within a specific store.
+    Retrieves a list of all inventory transactions for a specific product
+    within a specific store.
     """
     return await services.get_all_transactions_for_product(db, store_id, product_id, skip, limit)

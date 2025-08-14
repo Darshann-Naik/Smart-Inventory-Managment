@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from . import crud, models, schemas
-from core.exceptions import BadRequestException, NotFoundException
+from core.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.ml_service import services as ml_services
+
 logger = logging.getLogger(__name__)
 
 async def create_transaction(
@@ -17,29 +18,35 @@ async def create_transaction(
 ) -> models.InventoryTransaction:
     """
     Service layer for recording an inventory transaction.
-    Relies on the session-level transaction from the dependency.
+    - Handles business logic and validation.
+    - Calls the CRUD layer to perform database operations.
+    - Triggers the ML model to learn from the new transaction.
     """
     try:
-        # The crud function now returns the transaction AND the new stock level
         transaction, new_stock_level = await crud.create(
             db=db,
             transaction_in=transaction_in,
             user_id=user_id
         )
-
-        # --- THIS IS THE INTEGRATION POINT ---
-        # Asynchronously tell the ML service to learn from what just happened.
-        # This won't block the user's request.
+        
+        # Asynchronously train the ML model without blocking the response
         await ml_services.train_model(transaction, new_stock_level)
-        # The dependency will handle the commit when the request successfully finishes.
+        
         return transaction
     except ValueError as e:
-        # Raising an exception will cause the dependency to roll back the transaction.
+        # Catch specific, user-facing errors from the CRUD layer
         raise BadRequestException(detail=str(e))
-    except IntegrityError:
-        raise NotFoundException(detail="The specified user, store, or product does not exist.")
+    except IntegrityError as e:
+        # --- THE FIX IS HERE ---
+        # Catch potential database integrity issues (like the check constraint violation)
+        # and raise a ConflictException, which correctly uses the 'detail' argument.
+        await db.rollback()
+        logger.warning(f"Database integrity error during transaction creation: {e}")
+        raise ConflictException(detail="The transaction could not be completed due to a data conflict or invalid reference.")
     except Exception as e:
+        # Catch any other unexpected errors
         logger.error(f"Unexpected error during transaction processing: {e}", exc_info=True)
+        await db.rollback()
         raise
 
 async def get_all_transactions(db: AsyncSession, store_id: uuid.UUID, skip: int, limit: int) -> List[models.InventoryTransaction]:
