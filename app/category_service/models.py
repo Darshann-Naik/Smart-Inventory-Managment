@@ -16,11 +16,11 @@ class Category(SQLModel, table=True):
     parent_id: Optional[uuid.UUID] = Field(default=None, foreign_key="category.id", nullable=True)
     is_active: bool = Field(default=True)
     created_by:uuid.UUID = Field(foreign_key="user.id", index=True,default=None)
-    deactivated_by:uuid.UUID = Field(foreign_key="user.id", index=True, default=None)
+    deactivated_by:uuid.UUID = Field(foreign_key="user.id", index=True, default=None, nullable=True)
     deactivated_at: Optional[datetime] = Field(
     default=None,
     description="Timestamp for soft delete",
-    sa_column=Column(DateTime(timezone=True), index=True)
+    sa_column=Column(DateTime(timezone=True), index=True, nullable=True)
 )
 
 
@@ -36,4 +36,7 @@ class Category(SQLModel, table=True):
     # Relationships
     products: List["Product"] = Relationship(back_populates="category")
     parent: Optional["Category"] = Relationship(back_populates="children", sa_relationship_kwargs=dict(remote_side="Category.id"))
-    children: List["Category"] = Relationship(back_populates="parent")
+    children: List["Category"] = Relationship(
+        back_populates="parent",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )

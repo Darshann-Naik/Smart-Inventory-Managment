@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import Field, SQLModel, Relationship, UniqueConstraint
-from sqlalchemy import Column, DateTime, Index
+from sqlalchemy import Column, DateTime, Index, text
 
 if TYPE_CHECKING:
     from app.store_product_service.models import StoreProduct
@@ -43,5 +43,5 @@ class Product(SQLModel, table=True):
 
     __table_args__ = (
         UniqueConstraint("name", "category_id", name="unique_name_in_category"),
-        Index("uq_sku_active", "sku", unique=True, postgresql_where=(lambda: Product.is_active == True))
+        Index("uq_sku_active", "sku", unique=True, postgresql_where=text("is_active = true"))
     )
