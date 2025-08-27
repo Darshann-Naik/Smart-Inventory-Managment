@@ -61,8 +61,7 @@ async def seed_roles(db: AsyncSession):
 
 async def seed_default_user_and_store(db: AsyncSession):
     """
-    Creates a default super admin user and an associated default store,
-    linking them correctly within a single transaction.
+    Creates a default super admin user and an associated default store.
     """
     log.info("Seeding default user and store...")
     admin_email = "admin@example.com"
@@ -75,14 +74,20 @@ async def seed_default_user_and_store(db: AsyncSession):
         log.info(f"User '{admin_email}' already exists. Skipping seeding.")
         return
 
-    # 2. Get the super_admin role, which should have been created by seed_roles
+    # 2. Get the super_admin role
     role_stmt = select(user_models.Role).where(user_models.Role.name == "super_admin")
     super_admin_role = (await db.execute(role_stmt)).scalar_one_or_none()
     if not super_admin_role:
         log.error("Super admin role not found. Please ensure roles are seeded first.")
         return
 
-    # 3. Create both User and Store objects in memory first
+    # 3. Create both User and Store objects in memory
+    default_store = store_models.Store(
+        name=store_name,
+        gstin="DEFAULTGSTIN001",
+        is_active=True,
+    )
+    
     admin_user = user_models.User(
         user_id="SUSA001",
         email=admin_email,
@@ -90,26 +95,17 @@ async def seed_default_user_and_store(db: AsyncSession):
         first_name="Admin",
         last_name="User",
         is_active=True,
-        roles=[super_admin_role],  # Assign the role directly
+        role=super_admin_role, # Assign the single role
+        store_id=default_store.id,
     )
-
-    default_store = store_models.Store(
-        name=store_name,
-        gstin="DEFAULTGSTIN001",
-        is_active=True,
-        # The created_by ID will be populated by the back-reference
-    )
-
-    # 4. Link the objects together in memory. SQLModel handles the FKs.
-    admin_user.store_id = default_store.id
+    
     default_store.created_by = admin_user.id
 
-    # 5. Add both to the session and commit ONCE.
+    # 5. Add both to the session and commit
     db.add(admin_user)
     db.add(default_store)
     await db.commit()
 
-    # 6. Refresh the objects to get their final state from the DB for logging.
     await db.refresh(admin_user)
     await db.refresh(default_store)
 

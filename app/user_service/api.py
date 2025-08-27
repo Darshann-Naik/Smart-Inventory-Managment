@@ -1,5 +1,5 @@
 # /app/user_service/api.py
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request # Import Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,7 +7,6 @@ from core.database import get_db_session
 from . import models, schemas, services
 from .dependencies import get_current_active_user
 
-# All user/auth routes will be prefixed with /users
 router = APIRouter()
 
 @router.post(
@@ -18,10 +17,11 @@ router = APIRouter()
 )
 async def register_user(
     user_in: schemas.UserCreate,
+    request: Request, 
     db: AsyncSession = Depends(get_db_session),
 ):
     """Register a new user and associate them with a store."""
-    return await services.register(db=db, user_in=user_in)
+    return await services.register(db=db, user_in=user_in, request=request)
 
 @router.post(
     "/token",
@@ -65,6 +65,7 @@ async def get_current_user(
 )
 async def update_current_user(
     update_data: schemas.UserUpdate,
+    request: Request, 
     db: AsyncSession = Depends(get_db_session),
     current_user: models.User = Depends(get_current_active_user),
 ):
@@ -72,5 +73,6 @@ async def update_current_user(
     return await services.update_profile(
         db=db,
         user=current_user,
-        update_data=update_data
+        update_data=update_data,
+        request=request
     )

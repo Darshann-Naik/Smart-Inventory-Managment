@@ -19,7 +19,7 @@ from app.product_service.api import router as product_router
 from app.store_product_service.api import router as store_product_router
 from app.transaction_service.api import router as transaction_router
 from app.dashboard_service.api import router as dashboard_router # Import dashboard router
-
+from app.audit_log_service.api import router as audit_router
 from app.ml_service.api import router as ml_router
 # CORRECTED: The inventory_service import has been removed.
 
@@ -88,7 +88,7 @@ api_router.include_router(store_product_router, tags=["Store-Product Links"])
 api_router.include_router(transaction_router, prefix="/transactions", tags=["Transaction Management"])
 api_router.include_router(ml_router, prefix="/ml", tags=["Machine Learning"])
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard & Analytics"])
-
+api_router.include_router(audit_router, prefix="/audit", tags=["Audit"])
 # CORRECTED: The inventory_router inclusion has been removed.
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

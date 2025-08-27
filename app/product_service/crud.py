@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from .models import Product
 from .schemas import ProductUpdate
 
-
-
 async def get_by_sku(db: AsyncSession, sku: str) -> Optional[Product]:
     statement = select(Product).where(
         func.lower(Product.sku) == sku.lower(),

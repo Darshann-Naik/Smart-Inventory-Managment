@@ -1,5 +1,4 @@
 # /app/category_service/crud.py
-
 import uuid
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession

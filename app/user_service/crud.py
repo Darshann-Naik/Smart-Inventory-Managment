@@ -1,5 +1,6 @@
 # /app/user_service/crud.py
 from typing import Optional
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
@@ -10,17 +11,17 @@ from core.security import hash_password, verify_password
 from . import models, schemas
 
 async def get_by_email(db: AsyncSession, email: str) -> Optional[models.User]:
-    """Retrieves a user by email, eager-loading related roles."""
+    """Retrieves a user by email, eager-loading the related role."""
     statement = (
         select(models.User)
         .where(models.User.email == email)
-        .options(selectinload(models.User.roles)) 
+        .options(selectinload(models.User.role)) # Changed from .roles
     )
     result = await db.execute(statement)
     return result.scalars().first()
 
 async def create(db: AsyncSession, user_in: schemas.UserCreate) -> models.User:
-    """Creates a new user and handles role assignment."""
+    """Creates a new user and assigns a single role."""
     role_stmt = select(models.Role).where(models.Role.name == user_in.role_name)
     role = (await db.execute(role_stmt)).scalar_one_or_none()
     if not role:
@@ -34,12 +35,14 @@ async def create(db: AsyncSession, user_in: schemas.UserCreate) -> models.User:
         hashed_password=hash_password(user_in.password),
         first_name=user_in.first_name,
         last_name=user_in.last_name,
-        roles=[role],
+        store_id=user_in.store_id,
+        role=role, # Assign the single role object
     )
 
     db.add(db_user)
     await db.flush()
-    await db.refresh(db_user)
+    await db.refresh(db_user, attribute_names=["role"]) # Refresh the user and its new role
+    
     return db_user
 
 async def authenticate(db: AsyncSession, email: str, password: str) -> Optional[models.User]:

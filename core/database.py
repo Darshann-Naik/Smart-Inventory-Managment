@@ -25,7 +25,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
                 await session.rollback()
                 raise
 
-# ... (rest of the file remains the same) ...
 async def drop_db_and_tables():
     async with engine.begin() as conn:
         await conn.execute(text("DROP TABLE IF EXISTS storeproduct CASCADE"))
@@ -37,7 +36,7 @@ async def drop_db_and_tables():
         await conn.execute(text("DROP TABLE IF EXISTS role CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS userrolelink CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS sequencetracker CASCADE"))
-
+        await conn.execute(text("TRUNCATE TABLE audit_logs RESTART IDENTITY CASCADE"))
 async def create_db_and_tables():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

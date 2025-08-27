@@ -1,8 +1,7 @@
 # /app/product_service/api.py
-
 import uuid
 from typing import List
-from fastapi import Depends, status, APIRouter
+from fastapi import Depends, status, APIRouter, Request
 
 from core.database import get_db_session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,13 +20,14 @@ router = APIRouter()
 )
 async def create_product(
     product_in: schemas.ProductCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Adds a new product to the system for the authenticated user's store.
+    Adds a new product to the system.
     """
-    return await services.create_product(db=db, product_in=product_in, user_id=current_user.id)
+    return await services.create_product(db=db, product_in=product_in, current_user=current_user, request=request)
 
 @router.get(
     "/{product_id}",
@@ -40,15 +40,13 @@ async def get_product(
 ):
     """
     Retrieves details of a specific product.
-    - `super_admin` can view deactivated products.
-    - Other roles can only view active products.
     """
     return await services.get_product(db=db, product_id=product_id)
 
 @router.get(
     "",
     response_model=List[schemas.Product],
-    summary="List all products for the store",
+    summary="List all products",
 )
 async def list_products(
     skip: int = 0,
@@ -56,9 +54,7 @@ async def list_products(
     db: AsyncSession = Depends(get_db_session),
 ):
     """
-    Retrieves a list of all products for the store.
-    - `super_admin` can view deactivated products.
-    - Other roles can only view active products.
+    Retrieves a list of all products.
     """
     return await services.get_all_products(db=db, skip=skip, limit=limit)
 
@@ -71,13 +67,14 @@ async def list_products(
 async def update_product(
     product_id: uuid.UUID,
     product_in: schemas.ProductUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Updates the details of an existing product.
     """
-    return await services.update_product(db=db, product_id=product_id, product_in=product_in, user_id=current_user.id)
+    return await services.update_product(db=db, product_id=product_id, product_in=product_in, current_user=current_user, request=request)
 
 @router.delete(
     "/{product_id}",
@@ -87,11 +84,12 @@ async def update_product(
 )
 async def delete_product(
     product_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Soft-deletes a product from the system. The data is not permanently removed.
     """
-    await services.delete_product(db=db, product_id=product_id, user_id=current_user.id)
-    return
+    await services.delete_product(db=db, product_id=product_id, current_user=current_user, request=request)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

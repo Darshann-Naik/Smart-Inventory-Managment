@@ -1,7 +1,7 @@
 # /app/category_service/api.py
 
 from typing import List
-from fastapi import Depends, status, Response
+from fastapi import Depends, status, Response, Request # Import Request
 import uuid
 
 from core.router import StandardAPIRouter
@@ -22,15 +22,15 @@ router = StandardAPIRouter(tags=["Product Categories (Admin)"])
 )
 async def create_category(
     category_in: schemas.CategoryCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Creates a new GLOBAL category for organizing products.
-    This is an admin-only endpoint.
     - **prefix**: A unique 2-4 letter code for SKU generation (e.g., 'GROC').
     """
-    return await services.create_category(db=db, category_in=category_in,user_id=current_user.id)
+    return await services.create_category(db=db, category_in=category_in, current_user=current_user, request=request)
 
 @router.get(
     "/{category_id}",
@@ -40,7 +40,6 @@ async def create_category(
 async def get_category(
     category_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user), # Retained for auth
 ):
     """
     Retrieves the details of a single universal product category.
@@ -54,7 +53,6 @@ async def get_category(
 )
 async def list_categories(
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_active_user), # Retained for auth
 ):
     """
     Retrieves a list of all universal product categories available in the system.
@@ -70,12 +68,14 @@ async def list_categories(
 async def update_category(
     category_id: uuid.UUID,
     category_in: schemas.CategoryUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Updates the details of a universal product category. This is an admin-only endpoint.
     """
-    return await services.update_category(db, category_id=category_id, category_in=category_in)
+    return await services.update_category(db, category_id=category_id, category_in=category_in, current_user=current_user, request=request)
 
 @router.delete(
     "/{category_id}",
@@ -85,6 +85,7 @@ async def update_category(
 )
 async def deactivate_category(
     category_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -92,5 +93,5 @@ async def deactivate_category(
     Deletes a universal product category. This is an admin-only endpoint.
     Deletion will fail if the category is currently linked to any products.
     """
-    await services.deactivate(db, category_id=category_id,user_id=current_user.id)
+    await services.deactivate(db, category_id=category_id, current_user=current_user, request=request)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

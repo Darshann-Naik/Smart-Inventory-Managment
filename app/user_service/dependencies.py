@@ -1,5 +1,4 @@
 # /app/user_service/dependencies.py
-
 from typing import List
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
@@ -25,7 +24,6 @@ async def get_current_user(
     except JWTError:
         raise InvalidTokenException()
 
-    # CORRECTED: Call the standardized 'get_by_email' function.
     user = await crud.get_by_email(db, email=email)
     if not user:
         raise InvalidTokenException()
@@ -40,13 +38,12 @@ async def get_current_active_user(
 
 def require_role(required_roles: List[str]):
     """
-    Dependency factory to check for user roles.
+    Dependency factory to check for the user's role.
     """
     async def role_checker(
         current_user: models.User = Depends(get_current_active_user)
     ) -> models.User:
-        user_roles = {role.name for role in current_user.roles}
-        if not user_roles.intersection(set(required_roles)):
+        if not current_user.role or current_user.role.name not in required_roles:
             raise UnauthorizedException(detail="You do not have enough permissions.")
         return current_user
 

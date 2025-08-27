@@ -59,22 +59,6 @@ class StoreProductOut(BaseModel):
     # object from the ORM model and validate it using the _ProductInfo schema.
     product: _ProductInfo
 
-    # --- Computed Fields ---
-    # These now work because `self.product` exists on the Pydantic model instance.
-    @computed_field
-    @property
-    def name(self) -> str:
-        return self.product.name
-
-    @computed_field
-    @property
-    def sku(self) -> str:
-        return self.product.sku
-
-    @computed_field
-    @property
-    def description(self) -> Optional[str]:
-        return self.product.description
 
     class Config:
         # Allows Pydantic to read data from ORM model attributes

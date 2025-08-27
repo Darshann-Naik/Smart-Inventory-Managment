@@ -46,5 +46,9 @@ class Settings(BaseSettings):
 
     # ML Settings
     ML_MODEL_PATH: str = "ml_model.pkl"
-
+# --- Audit Log Settings ---
+    # A list of field names that should be redacted in audit logs.
+    AUDIT_PII_FIELDS: List[str] = ["password", "email", "token", "access_token", "refresh_token"]
+    # How many days to retain audit logs. Set to 0 to retain forever.
+    AUDIT_RETENTION_DAYS: int = 365
 settings = Settings()

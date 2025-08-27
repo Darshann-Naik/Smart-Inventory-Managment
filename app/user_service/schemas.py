@@ -3,6 +3,14 @@ from uuid import UUID
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 
+# Base schema for role data
+class Role(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 # Base schema for user attributes
 class UserBase(BaseModel):
     email: EmailStr
@@ -10,34 +18,24 @@ class UserBase(BaseModel):
     last_name: Optional[str] = None
 
 # Schema for creating a new user (registration)
-# CORRECTED: Reverted to use store_id instead of store_name.
 class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="User's email address.")
     password: str = Field(..., min_length=8, description="User's password (min 8 characters).")
     first_name: str
     last_name: str
-    role_name: str
+    store_id: UUID
+    role_name: str # e.g., "admin", "employee"
 
 # Schema for updating a user's profile
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-
-# Base schema for role data
-class RoleBase(BaseModel):
-    name: str
-
-# Schema for reading role data
-class Role(RoleBase):
-    class Config:
-        from_attributes = True
-
 # The primary User schema for API responses
 class User(UserBase):
     id: UUID
     user_id: str
-    roles: List[Role]
+    role: Optional[Role] = None # Changed from `roles: List[Role]`
 
     class Config:
         from_attributes = True
@@ -52,6 +50,6 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 class TokenPayload(BaseModel):
-    sub: str  # Subject (user email)
-    roles: List[str] = []
+    sub: str
+    roles: List[str] = [] # Kept as a list for flexibility in JWT claims
     exp: Optional[int] = None
